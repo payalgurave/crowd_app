@@ -1,0 +1,4222 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Container, Row, Col, Card, ProgressBar, Button, Form, InputGroup, ButtonGroup, Dropdown, Carousel } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { FaThList, FaThLarge, FaTh, FaShare, FaBookmark, FaBookmarkFill, FaFire } from 'react-icons/fa';
+import Masonry from 'react-masonry-css';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const ViewCampaigns = () => {
+  const [campaigns, setCampaigns] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('grid');
+  const [featuredCampaigns, setFeaturedCampaigns] = useState([]);
+  const [trendingCampaigns, setTrendingCampaigns] = useState([]);
+  const [sortBy, setSortBy] = useState('newest');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [bookmarkedCampaigns, setBookmarkedCampaigns] = useState([]);
+  const [showDonorWall, setShowDonorWall] = useState(false);
+  const [donorWallData, setDonorWallData] = useState([]);
+  const [campaignUpdates, setCampaignUpdates] = useState([]);
+  const [filterByDeadline, setFilterByDeadline] = useState('all');
+
+  const categories = ['all', 'education', 'medical', 'environment', 'technology', 'community'];
+
+  useEffect(() => {
+    fetchCampaigns();
+    fetchFeaturedCampaigns();
+    fetchTrendingCampaigns();
+  }, []);
+
+  const fetchFeaturedCampaigns = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/campaigns/featured');
+      setFeaturedCampaigns(response.data.slice(0, 3));
+    } catch (err) {
+      console.error('Failed to fetch featured campaigns:', err);
+    }
+  };
+
+  const fetchTrendingCampaigns = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/campaigns/trending');
+      setTrendingCampaigns(response.data.slice(0, 4));
+    } catch (err) {
+      console.error('Failed to fetch trending campaigns:', err);
+    }
+  };
+
+  const fetchCampaigns = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/campaigns');
+      setCampaigns(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError('Failed to fetch campaigns');
+      setLoading(false);
+    }
+  };
+
+  const handleSort = (value) => {
+    setSortBy(value);
+    let sortedCampaigns = [...campaigns];
+    switch (value) {
+      case 'newest':
+        sortedCampaigns.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        break;
+      case 'oldest':
+        sortedCampaigns.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        break;
+      case 'mostFunded':
+        sortedCampaigns.sort((a, b) => b.currentAmount - a.currentAmount);
+        break;
+      case 'leastFunded':
+        sortedCampaigns.sort((a, b) => a.currentAmount - b.currentAmount);
+        break;
+    }
+    setCampaigns(sortedCampaigns);
+  };
+
+  const toggleBookmark = (campaignId) => {
+    setBookmarkedCampaigns(prev => {
+      if (prev.includes(campaignId)) {
+        return prev.filter(id => id !== campaignId);
+      }
+      return [...prev, campaignId];
+    });
+  };
+
+  const handleShare = (campaign) => {
+    if (navigator.share) {
+      navigator.share({
+        title: campaign.title,
+        text: campaign.description,
+        url: window.location.href + '/' + campaign._id
+      });
+    }
+  };
+
+  const filteredCampaigns = campaigns.filter(campaign =>
+    (selectedCategory === 'all' || campaign.category === selectedCategory) &&
+    (campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    campaign.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const calculateProgress = (current, target) => {
+    return Math.min((current / target) * 100, 100);
+  };
+
+  if (loading) return <div className="text-center mt-5">Loading...</div>;
+  if (error) return <div className="text-center mt-5 text-danger">{error}</div>;
+
+  return (
+    <Container className="py-5">
+      {featuredCampaigns.length > 0 && (
+        <div className="mb-5">
+          <Carousel className="featured-carousel">
+            {featuredCampaigns.map((campaign) => (
+              <Carousel.Item key={campaign._id}>
+                <img
+                  className="d-block w-100"
+                  src={campaign.imageUrl || 'https://via.placeholder.com/1200x400'}
+                  alt={campaign.title}
+                  style={{ height: '400px', objectFit: 'cover' }}
+                />
+                <Carousel.Caption>
+                  <h3>{campaign.title}</h3>
+                  <p>{campaign.description.substring(0, 150)}...</p>
+                  <Link to={`/campaign/${campaign._id}`} className="btn btn-primary">
+                    Learn More
+                  </Link>
+                </Carousel.Caption>
+              </Carousel.Item>
+            ))}
+          </Carousel>
+        </div>
+      )}
+
+      {trendingCampaigns.length > 0 && (
+        <div className="mb-5">
+          <h3 className="mb-4">
+            <FaFire className="text-danger me-2" />
+            Trending Campaigns
+          </h3>
+          <Row xs={1} md={2} lg={4} className="g-4">
+            {trendingCampaigns.map((campaign) => (
+              <Col key={campaign._id}>
+                <Card className="h-100 shadow-sm hover-effect">
+                  <Card.Img
+                    variant="top"
+                    src={campaign.imageUrl || 'https://via.placeholder.com/300x200'}
+                    alt={campaign.title}
+                    style={{ height: '150px', objectFit: 'cover' }}
+                  />
+                  <Card.Body>
+                    <Card.Title>{campaign.title}</Card.Title>
+                    <ProgressBar
+                      now={calculateProgress(campaign.currentAmount, campaign.targetAmount)}
+                      label={`${Math.round(calculateProgress(campaign.currentAmount, campaign.targetAmount))}%`}
+                      variant="success"
+                    />
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
+
+      <h2 className="text-center mb-4">All Campaigns</h2>
+      
+      <div className="mb-4">
+        <Row className="align-items-center">
+          <Col md={3}>
+            <InputGroup>
+              <Form.Control
+                placeholder="Search campaigns..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </InputGroup>
+          </Col>
+          <Col md={3}>
+            <Form.Select value={sortBy} onChange={(e) => handleSort(e.target.value)}>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="mostFunded">Most Funded</option>
+              <option value="leastFunded">Least Funded</option>
+              <option value="endingSoon">Ending Soon</option>
+            </Form.Select>
+          </Col>
+          <Col md={3}>
+            <Form.Select value={filterByDeadline} onChange={(e) => setFilterByDeadline(e.target.value)}>
+              <option value="all">All Deadlines</option>
+              <option value="24h">Ending in 24 hours</option>
+              <option value="7d">Ending in 7 days</option>
+              <option value="30d">Ending in 30 days</option>
+            </Form.Select>
+          </Col>
+          <Col md={3}>
+            <ButtonGroup className="w-100">
+              <Button
+                variant={viewMode === 'grid' ? 'primary' : 'outline-primary'}
+                onClick={() => setViewMode('grid')}
+              >
+                <FaThLarge />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'primary' : 'outline-primary'}
+                onClick={() => setViewMode('list')}
+              >
+                <FaThList />
+              </Button>
+            </ButtonGroup>
+          </Col>
+        </Row>
+      </div>
+
+      {viewMode === 'masonry' ? (
+        <Masonry
+          breakpointCols={{
+            default: 4,
+            1100: 3,
+            700: 2,
+            500: 1
+          }}
+          className="masonry-grid"
+          columnClassName="masonry-grid_column"
+        >
+          {filteredCampaigns.map((campaign) => (
+            <motion.div
+              key={campaign._id}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="mb-4"
+            >
+              <Card className="h-100 shadow-sm hover-effect">
+                <Card.Img
+                  variant="top"
+                  src={campaign.imageUrl || 'https://via.placeholder.com/300x200'}
+                  alt={campaign.title}
+                  style={{ height: '200px', objectFit: 'cover' }}
+                />
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <Card.Title>{campaign.title}</Card.Title>
+                    <div>
+                      <Button
+                        variant="link"
+                        className="p-0 me-2"
+                        onClick={() => handleShare(campaign)}
+                      >
+                        <FaShare />
+                      </Button>
+                      <Button
+                        variant="link"
+                        className="p-0"
+                        onClick={() => toggleBookmark(campaign._id)}
+                      >
+                        {bookmarkedCampaigns.includes(campaign._id) ? <FaBookmarkFill /> : <FaBookmark />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Card.Text>
+                    {campaign.description.length > 100
+                      ? `${campaign.description.substring(0, 100)}...`
+                      : campaign.description}
+                  </Card.Text>
+                  <div className="mb-3">
+                    <ProgressBar
+                      now={calculateProgress(campaign.currentAmount, campaign.targetAmount)}
+                      label={`${Math.round(calculateProgress(campaign.currentAmount, campaign.targetAmount))}%`}
+                      variant="success"
+                    />
+                    <div className="d-flex justify-content-between mt-2">
+                      <small>Raised: ${campaign.currentAmount}</small>
+                      <small>Goal: ${campaign.targetAmount}</small>
+                    </div>
+                  </div>
+                  <div className="d-grid gap-2">
+                    <Link to={`/campaign/${campaign._id}`} className="btn btn-primary">
+                      View Details
+                    </Link>
+                  </div>
+                </Card.Body>
+              </Card>
+            </motion.div>
+          ))}
+        </Masonry>
+      ) : (
+        <Row xs={1} md={viewMode === 'grid' ? 2 : 1} lg={viewMode === 'grid' ? 3 : 1} className="g-4">
+        {filteredCampaigns.map((campaign) => (
+          <Col key={campaign._id}>
+            <Card className={`h-100 shadow-sm hover-effect ${viewMode === 'list' ? 'flex-row' : ''}`}>
+              <Card.Img
+                variant="top"
+                src={campaign.imageUrl || 'https://via.placeholder.com/300x200'}
+                alt={campaign.title}
+                style={{
+                  height: viewMode === 'list' ? '200px' : '200px',
+                  width: viewMode === 'list' ? '300px' : '100%',
+                  objectFit: 'cover'
+                }}
+              />
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <Card.Title>{campaign.title}</Card.Title>
+                  <div>
+                    <Button
+                      variant="link"
+                      className="p-0 me-2"
+                      onClick={() => handleShare(campaign)}
+                    >
+                      <FaShare />
+                    </Button>
+                    <Button
+                      variant="link"
+                      className="p-0"
+                      onClick={() => toggleBookmark(campaign._id)}
+                    >
+                      {bookmarkedCampaigns.includes(campaign._id) ? <FaBookmarkFill /> : <FaBookmark />}
+                    </Button>
+                  </div>
+                </div>
+                <Card.Text>
+                  {campaign.description.length > 100
+                    ? `${campaign.description.substring(0, 100)}...`
+                    : campaign.description}
+                </Card.Text>
+                <div className="mb-3">
+                  <ProgressBar
+                    now={calculateProgress(campaign.currentAmount, campaign.targetAmount)}
+                    label={`${Math.round(calculateProgress(campaign.currentAmount, campaign.targetAmount))}%`}
+                    variant="success"
+                  />
+                  <div className="d-flex justify-content-between mt-2">
+                    <small>Raised: ${campaign.currentAmount}</small>
+                    <small>Goal: ${campaign.targetAmount}</small>
+                  </div>
+                </div>
+                <div className="d-grid gap-2">
+                  <Link to={`/campaign/${campaign._id}`} className="btn btn-primary">
+                    View Details
+                  </Link>
+                </div>
+              </Card.Body>
+              <Card.Footer className="text-muted">
+                <small>Created by: {campaign.creator}</small>
+              </Card.Footer>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      {filteredCampaigns.length > 0 && (
+        <div className="text-center mt-4">
+          <Button variant="outline-primary" size="lg" onClick={() => setViewMode('list')}>
+            View All Campaigns
+          </Button>
+        </div>
+      )}
+
+      {filteredCampaigns.length === 0 && (
+        <div className="text-center mt-4">
+          <p>No campaigns found matching your search.</p>
+        </div>
+      )}
+    </Container>
+  );
+};
+
+.masonry-grid {
+  display: flex;
+  margin-left: -30px;
+  width: auto;
+}
+
+.masonry-grid_column {
+  padding-left: 30px;
+  background-clip: padding-box;
+}
+
+.featured-carousel .carousel-caption {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.hover-effect {
+  transition: transform 0.3s ease-in-out;
+}
+
+.hover-effect:hover {
+  transform: translateY(-5px);
+}
+
+.category-button {
+  transition: all 0.3s ease;
+}
+
+.category-button:hover {
+  transform: scale(1.05);
+}
+
+export default ViewCampaigns;
+
+      <div className="donor-wall-section mb-5">
+        <h3 className="mb-4">Recent Supporters</h3>
+        <Row xs={2} md={4} className="g-4">
+          {donorWallData.map((donor, index) => (
+            <Col key={index}>
+              <Card className="text-center h-100">
+                <Card.Body>
+                  <div className="donor-avatar mb-2">
+                    <img
+                      src={donor.avatar || 'https://via.placeholder.com/50'}
+                      alt={donor.name}
+                      className="rounded-circle"
+                      style={{ width: '50px', height: '50px' }}
+                    />
+                  </div>
+                  <Card.Title className="h6">{donor.name}</Card.Title>
+                  <Card.Text className="text-muted small">
+                    Donated ${donor.amount}
+                  </Card.Text>
+                  <Card.Text className="text-muted small">
+                    {donor.message}
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </div>
+
+      <div className="campaign-updates mb-5">
+        <h3 className="mb-4">Campaign Updates</h3>
+        {campaignUpdates.map((update, index) => (
+          <Card key={index} className="mb-3">
+            <Card.Body>
+              <Card.Title>{update.title}</Card.Title>
+              <Card.Subtitle className="mb-2 text-muted">
+                {new Date(update.date).toLocaleDateString()}
+              </Card.Subtitle>
+              <Card.Text>{update.content}</Card.Text>
+              {update.media && (
+                <img
+                  src={update.media}
+                  alt="Update media"
+                  className="img-fluid rounded"
+                />
+              )}
+            </Card.Body>
+          </Card>
+        ))}
+      </div>
+      <div className="d-grid gap-2">
+        <Link to={`/campaign/${campaign._id}`} className="btn btn-primary">
+          View Details
+        </Link>
+      </div>
+    </Card.Body>
+  </Card>
+)
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
+</Card>
