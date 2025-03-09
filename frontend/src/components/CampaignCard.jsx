@@ -1,9 +1,16 @@
-import React from 'react';
-import { Card, CardContent, CardMedia, Typography, Box, Chip, LinearProgress } from '@mui/material';
+import React, { useState } from 'react';
+import { Card, CardContent, CardMedia, Typography, Box, Chip, LinearProgress, Button, Dialog } from '@mui/material';
+import PaymentForm from './PaymentForm';
 import { formatDistanceToNow } from 'date-fns';
 
 const CampaignCard = ({ campaign }) => {
   const progress = (campaign.currentAmount / campaign.goal) * 100;
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+
+  const handlePaymentSuccess = (paymentData) => {
+    setIsPaymentOpen(false);
+    // TODO: Update campaign data after successful payment
+  };
 
   return (
     <Card sx={{ maxWidth: 345, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -45,10 +52,10 @@ const CampaignCard = ({ campaign }) => {
           <LinearProgress variant="determinate" value={progress} sx={{ mb: 1 }} />
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography variant="body2" color="text.secondary">
-              ${campaign.currentAmount} raised
+              ${campaign.currentAmount.toLocaleString()}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              ${campaign.goal} goal
+              ${campaign.goal.toLocaleString()}
             </Typography>
           </Box>
         </Box>
@@ -60,7 +67,28 @@ const CampaignCard = ({ campaign }) => {
             {campaign.backers} backers
           </Typography>
         </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          fullWidth
+          onClick={() => setIsPaymentOpen(true)}
+          sx={{ mt: 2 }}
+        >
+          Support This Campaign
+        </Button>
       </CardContent>
+      <Dialog
+        open={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <PaymentForm
+          campaignId={campaign.id}
+          campaignTitle={campaign.title}
+          onSuccess={handlePaymentSuccess}
+        />
+      </Dialog>
     </Card>
   );
 };
